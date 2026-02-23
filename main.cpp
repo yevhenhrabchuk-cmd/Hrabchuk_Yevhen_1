@@ -1,128 +1,132 @@
 #include <iostream>
 #include <vector>
+#include <algorithm>
+#include <random>
 #include <chrono>
 #include <future>
-#include <algorithm>
-#include <iomanip>
 
 using namespace std;
-using namespace std::chrono;
+using namespace chrono;
 
-// --- Крок 2: Власна функція для виведення масиву ---
+
 void printArray(const vector<int>& arr) {
-    for (int i = 0; i < arr.size(); ++i) {
-        cout << arr[i] << " ";
-    }
+    for (int x : arr)
+        cout << x << " ";
     cout << endl;
 }
 
-// Допоміжна функція генерації масиву випадкових чисел
+
 vector<int> generateArray(int n) {
     vector<int> arr(n);
-    for (int i = 0; i < n; ++i) {
-        arr[i] = rand() % 1000 + 1; // Числа від 1 до 1000
-    }
+    random_device rd;
+    mt19937 gen(rd());
+    uniform_int_distribution<> dist(0, 10000);
+
+    for (int i = 0; i < n; i++)
+        arr[i] = dist(gen);
+
     return arr;
 }
 
-// --- Крок 3: Метод сортування (Бульбашка для прикладу) ---
-void bubbleSort(vector<int>& arr) {
+void selectionSort(vector<int>& arr) {
     int n = arr.size();
-    for (int i = 0; i < n - 1; ++i) {
-        for (int j = 0; j < n - i - 1; ++j) {
-            if (arr[j] > arr[j + 1]) {
-                swap(arr[j], arr[j + 1]);
-            }
-        }
+    for (int i = 0; i < n - 1; i++) {
+        int minIndex = i;
+        for (int j = i + 1; j < n; j++)
+            if (arr[j] < arr[minIndex])
+                minIndex = j;
+        swap(arr[i], arr[minIndex]);
     }
 }
 
-// --- Крок 6: Бінарний пошук ---
+void shellSort(vector<int>& arr) {
+    int n = arr.size();
+    for (int gap = n / 2; gap > 0; gap /= 2)
+        for (int i = gap; i < n; i++) {
+            int temp = arr[i];
+            int j;
+            for (j = i; j >= gap && arr[j - gap] > temp; j -= gap)
+                arr[j] = arr[j - gap];
+            arr[j] = temp;
+        }
+}
+
+void countingSort(vector<int>& arr) {
+    int maxVal = *max_element(arr.begin(), arr.end());
+    vector<int> count(maxVal + 1, 0);
+
+    for (int num : arr)
+        count[num]++;
+
+    int index = 0;
+    for (int i = 0; i <= maxVal; i++)
+        while (count[i]--)
+            arr[index++] = i;
+}
+
 int binarySearch(const vector<int>& arr, int target) {
-    int left = 0;
-    int right = arr.size() - 1;
+    int left = 0, right = arr.size() - 1;
+
     while (left <= right) {
         int mid = left + (right - left) / 2;
-        if (arr[mid] == target) return mid;
-        if (arr[mid] < target) left = mid + 1;
-        else right = mid - 1;
+
+        if (arr[mid] == target)
+            return mid;
+        else if (arr[mid] < target)
+            left = mid + 1;
+        else
+            right = mid - 1;
     }
     return -1;
 }
 
-int main() {
-    // Ініціалізація генератора випадкових чисел
-    srand(time(0)); 
+long long measureSort(void(*sortFunc)(vector<int>&), vector<int> arr) {
+    auto start = high_resolution_clock::now();
+    sortFunc(arr);
+    auto stop = high_resolution_clock::now();
 
-    // --- Крок 4: Запуск не менше 5 разів для різних n ---
-    vector<int> sizes = {1000, 2000, 5000, 10000, 20000};
-    
-    cout << "=== Таблиця часу сортування t=f(n) ===" << endl;
-    cout << left << setw(15) << "К-сть (n)" 
-         << setw(20) << "Бульбашка (мс)" 
-         << setw(20) << "std::sort (мс)" << endl;
-    cout << string(50, '-') << endl;
+    return duration_cast<microseconds>(stop - start).count();
+}
+
+int main() {
+
+    vector<int> sizes = {18, 160, 1024, 4096, 32600, 128000};
 
     for (int n : sizes) {
-        vector<int> arr1 = generateArray(n);
-        vector<int> arr2 = arr1; // Точна копія для іншого методу
+        cout << "\nSize: " << n << endl;
+        vector<int> arr = generateArray(n);
 
-        // Замір для Бульбашки
-        auto start = high_resolution_clock::now();
-        bubbleSort(arr1);
-        auto stop = high_resolution_clock::now();
-        auto durationBubble = duration_cast<milliseconds>(stop - start).count();
+        long long t1 = measureSort(selectionSort, arr);
+        long long t2 = measureSort(shellSort, arr);
+        long long t3 = measureSort(countingSort, arr);
 
-        // Замір для швидкого сортування C++ (QuickSort / IntroSort)
-        start = high_resolution_clock::now();
-        sort(arr2.begin(), arr2.end());
-        stop = high_resolution_clock::now();
-        auto durationQuick = duration_cast<milliseconds>(stop - start).count();
-
-        cout << left << setw(15) << n 
-             << setw(20) << durationBubble 
-             << setw(20) << durationQuick << endl;
+        cout << "Selection: " << t1 << " us\n";
+        cout << "Shell:     " << t2 << " us\n";
+        cout << "Counting:  " << t3 << " us\n";
     }
 
-    // --- Крок 5: Асинхронний код ---
-    cout << "\n=== Крок 5: Асинхронне сортування ===" << endl;
-    int asyncSize = 20000;
-    vector<int> arrSync = generateArray(asyncSize);
-    vector<int> arrAsync = arrSync;
+    cout << "\nAsync test (n = 128000)\n";
+    vector<int> arr = generateArray(128000);
 
-    auto startSync = high_resolution_clock::now();
-    bubbleSort(arrSync);
-    auto stopSync = high_resolution_clock::now();
-    cout << "Синхронно (" << asyncSize << " ел.): " 
-         << duration_cast<milliseconds>(stopSync - startSync).count() << " мс\n";
+    auto f1 = async(launch::async, measureSort, selectionSort, arr);
+    auto f2 = async(launch::async, measureSort, shellSort, arr);
+    auto f3 = async(launch::async, measureSort, countingSort, arr);
 
-    auto startAsync = high_resolution_clock::now();
-    // Запускаємо сортування в окремому потоці
-    future<void> result = async(launch::async, [&arrAsync]() {
-        bubbleSort(arrAsync);
-    });
-    result.get(); // Чекаємо, поки потік завершить роботу
-    auto stopAsync = high_resolution_clock::now();
-    cout << "Асинхронно (" << asyncSize << " ел.): " 
-         << duration_cast<milliseconds>(stopAsync - startAsync).count() << " мс\n";
+    cout << "Selection async: " << f1.get() << " us\n";
+    cout << "Shell async:     " << f2.get() << " us\n";
+    cout << "Counting async:  " << f3.get() << " us\n";
 
-    // --- Крок 6: Бінарний пошук ---
-    cout << "\n=== Крок 6: Бінарний пошук ===" << endl;
-    vector<int> searchArr = generateArray(20);
-    sort(searchArr.begin(), searchArr.end()); // Масив має бути обов'язково відсортований!
-    
-    cout << "Згенерований відсортований масив:\n";
-    printArray(searchArr);
-    
-    cout << "Введіть число для пошуку: ";
+    countingSort(arr);
     int target;
-    if (cin >> target) {
-        int index = binarySearch(searchArr, target);
-        if (index != -1)
-            cout << "Елемент знайдено на індексі: " << index << endl;
-        else
-            cout << "Елемент не знайдено." << endl;
-    }
+    cout << "\nEnter element to search: ";
+    cin >> target;
+
+    int result = binarySearch(arr, target);
+
+    if (result != -1)
+        cout << "Element found at index: " << result << endl;
+    else
+        cout << "Element not found\n";
 
     return 0;
 }
